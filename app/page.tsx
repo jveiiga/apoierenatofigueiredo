@@ -1,69 +1,493 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Image from "next/image";
+import {
+  ChangeEvent,
+  PointerEvent,
+  useEffect,
+  useState,
+} from "react";
+
+const CANVAS_WIDTH = 1080;
+const CANVAS_HEIGHT = 1920;
+
+/*
+ * Área onde a foto aparece dentro da moldura.
+ *
+ * Estamos considerando os 1208 x 839 informados
+ * como ALTURA x LARGURA.
+ *
+ * Se a posição real for diferente, altere apenas
+ * x e y abaixo.
+ */
+const PHOTO_AREA = {
+  x: 20,
+  y: 356,
+  width: 1040,
+  height: 1208,
+};
+
+export default function ApoiePage() {
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  const [scale, setScale] = useState(1);
+
+  const [position, setPosition] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const [dragStart, setDragStart] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (photoUrl) {
+      URL.revokeObjectURL(photoUrl);
+    }
+
+    const url = URL.createObjectURL(file);
+
+    setPhoto(file);
+    setPhotoUrl(url);
+
+    setScale(1);
+
+    setPosition({
+      x: 0,
+      y: 0,
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (photoUrl) {
+        URL.revokeObjectURL(photoUrl);
+      }
+    };
+  }, [photoUrl]);
+
+  /*
+   * INÍCIO DO ARRASTE
+   */
+  function handlePointerDown(
+    event: PointerEvent<HTMLDivElement>
+  ) {
+    if (!photoUrl) return;
+
+    event.preventDefault();
+
+    setIsDragging(true);
+
+    setDragStart({
+      x: event.clientX - position.x,
+      y: event.clientY - position.y,
+    });
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  /*
+   * MOVIMENTO
+   */
+  function handlePointerMove(
+    event: PointerEvent<HTMLDivElement>
+  ) {
+    if (!isDragging) return;
+
+    const newX = event.clientX - dragStart.x;
+    const newY = event.clientY - dragStart.y;
+
+    setPosition({
+      x: newX,
+      y: newY,
+    });
+  }
+
+  /*
+   * FINAL DO ARRASTE
+   */
+  function handlePointerUp(
+    event: PointerEvent<HTMLDivElement>
+  ) {
+    setIsDragging(false);
+
+    if (
+      event.currentTarget.hasPointerCapture(
+        event.pointerId
+      )
+    ) {
+      event.currentTarget.releasePointerCapture(
+        event.pointerId
+      );
+    }
+  }
+
+  /*
+   * CENTRALIZAR
+   */
+  function handleCenterPhoto() {
+    setPosition({
+      x: 0,
+      y: 0,
+    });
+  }
+
+  /*
+   * DOWNLOAD
+   */
+  async function handleDownload() {
+    if (!photoUrl) return;
+
+    const canvas = document.createElement("canvas");
+
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) return;
+
+    /*
+     * CARREGA FOTO
+     */
+    const photoImage = new window.Image();
+
+    photoImage.src = photoUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      photoImage.onload = () => resolve();
+      photoImage.onerror = () =>
+        reject(new Error("Erro ao carregar a foto."));
+    });
+
+    /*
+     * PROPORÇÃO ORIGINAL DA FOTO
+     */
+    const imageRatio =
+      photoImage.width / photoImage.height;
+
+    /*
+     * PROPORÇÃO DA ÁREA DISPONÍVEL
+     */
+    const areaRatio =
+      PHOTO_AREA.width / PHOTO_AREA.height;
+
+    let drawWidth: number;
+    let drawHeight: number;
+
+    /*
+     * Faz a imagem preencher toda a área.
+     *
+     * Isso é equivalente ao object-cover.
+     */
+    if (imageRatio > areaRatio) {
+      drawHeight = PHOTO_AREA.height;
+      drawWidth = drawHeight * imageRatio;
+    } else {
+      drawWidth = PHOTO_AREA.width;
+      drawHeight = drawWidth / imageRatio;
+    }
+
+    /*
+     * APLICA ZOOM
+     */
+    drawWidth *= scale;
+    drawHeight *= scale;
+
+    /*
+     * POSIÇÃO CENTRAL DA FOTO
+     */
+    let drawX =
+      PHOTO_AREA.x +
+      (PHOTO_AREA.width - drawWidth) / 2;
+
+    let drawY =
+      PHOTO_AREA.y +
+      (PHOTO_AREA.height - drawHeight) / 2;
+
+    /*
+     * A posição usada no editor visual precisa
+     * ser convertida para a escala do Canvas.
+     *
+     * O editor ocupa 100% da largura disponível.
+     */
+    const editorWidth =
+      typeof window !== "undefined"
+        ? Math.min(window.innerWidth - 40, 448)
+        : 448;
+
+    const canvasScale =
+      CANVAS_WIDTH / editorWidth;
+
+    drawX += position.x * canvasScale;
+    drawY += position.y * canvasScale;
+
+    /*
+     * RECORTE EXATO DA ÁREA DA FOTO
+     */
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.rect(
+      PHOTO_AREA.x,
+      PHOTO_AREA.y,
+      PHOTO_AREA.width,
+      PHOTO_AREA.height
+    );
+
+    ctx.clip();
+
+    /*
+     * DESENHA A FOTO
+     */
+    ctx.drawImage(
+      photoImage,
+      drawX,
+      drawY,
+      drawWidth,
+      drawHeight
+    );
+
+    /*
+     * REMOVE O CLIP
+     */
+    ctx.restore();
+
+    /*
+     * CARREGA MOLDURA
+     */
+    const frameImage = new window.Image();
+
+    frameImage.src = "/moldura-renato.png";
+
+    await new Promise<void>((resolve, reject) => {
+      frameImage.onload = () => resolve();
+      frameImage.onerror = () =>
+        reject(new Error("Erro ao carregar a moldura."));
+    });
+
+    /*
+     * MOLDURA SEMPRE POR CIMA
+     */
+    ctx.drawImage(
+      frameImage,
+      0,
+      0,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
+
+    /*
+     * DOWNLOAD
+     */
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download =
+        "apoie-renato-figueiredo.png";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+    }, "image/png");
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <main className="min-h-screen bg-white px-5 py-10">
+      <div className="mx-auto flex max-w-md flex-col items-center">
+
+        {/* LOGO */}
         <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="/logo-renato.png"
+          alt="Renato Figueiredo"
+          width={200}
+          height={80}
           priority
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+
+        {/* TÍTULO */}
+        <h1 className="mt-6 text-center text-3xl font-bold">
+          Apoie Renato Figueiredo
+        </h1>
+
+        {/* DESCRIÇÃO */}
+        <p className="mt-3 text-center text-gray-600">
+          Coloque sua foto e faça parte desse movimento.
+        </p>
+
+        {/* EDITOR */}
+        <div className="mt-8 w-full">
+
+          <div
+            className="relative w-full overflow-hidden"
+            style={{
+              aspectRatio: "1080 / 1920",
+            }}
+          >
+
+            {/* FOTO */}
+            {photoUrl && (
+              <div
+                className="absolute overflow-hidden"
+                style={{
+                  left: `${(
+                    PHOTO_AREA.x / CANVAS_WIDTH
+                  ) * 100}%`,
+
+                  top: `${(
+                    PHOTO_AREA.y / CANVAS_HEIGHT
+                  ) * 100}%`,
+
+                  width: `${(
+                    PHOTO_AREA.width /
+                    CANVAS_WIDTH
+                  ) * 100}%`,
+
+                  height: `${(
+                    PHOTO_AREA.height /
+                    CANVAS_HEIGHT
+                  ) * 100}%`,
+                }}
+              >
+
+                <div
+                  className="relative h-full w-full cursor-grab touch-none active:cursor-grabbing"
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  style={{
+                    transform: `
+                      translate(${position.x}px, ${position.y}px)
+                      scale(${scale})
+                    `,
+                  }}
+                >
+                  <Image
+                    src={photoUrl}
+                    alt="Foto selecionada"
+                    fill
+                    unoptimized
+                    draggable={false}
+                    className="select-none object-cover"
+                  />
+                </div>
+
+              </div>
+            )}
+
+            {/* MOLDURA */}
+            <div className="pointer-events-none absolute inset-0 z-10">
+              <Image
+                src="/moldura-renato.png"
+                alt="Moldura Renato Figueiredo"
+                fill
+                priority
+                className="object-fill"
+              />
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* UPLOAD */}
+        <label
+          htmlFor="photo-upload"
+          className="mt-8 cursor-pointer rounded-lg bg-black px-6 py-3 font-semibold text-white transition hover:bg-gray-800"
+        >
+          {photo
+            ? "Trocar minha foto"
+            : "Escolher minha foto"}
+        </label>
+
+        <input
+          id="photo-upload"
+          type="file"
+          accept="image/*"
+          onChange={handlePhotoChange}
+          className="hidden"
+        />
+
+        {/* CONTROLES */}
+        {photoUrl && (
+          <>
+            {/* ZOOM */}
+            <div className="mt-6 w-full">
+
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Ajustar tamanho
+                </span>
+
+                <span className="text-sm text-gray-500">
+                  {Math.round(scale * 100)}%
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.01"
+                value={scale}
+                onChange={(event) =>
+                  setScale(
+                    Number(event.target.value)
+                  )
+                }
+                className="w-full"
+              />
+
+            </div>
+
+            {/* CENTRALIZAR */}
+            <button
+              type="button"
+              onClick={handleCenterPhoto}
+              className="mt-4 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium transition hover:bg-gray-100"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              ↺ Centralizar foto
+            </button>
+
+            {/* DOWNLOAD */}
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="mt-4 w-full rounded-lg bg-black px-4 py-3 font-semibold text-white transition hover:bg-gray-800"
             >
-              Learning
-            </a>{" "}
-            center.
+              Baixar foto
+            </button>
+          </>
+        )}
+
+        {/* ARQUIVO */}
+        {photo && (
+          <p className="mt-3 text-center text-sm text-gray-500">
+            {photo.name}
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        )}
+
+      </div>
+    </main>
   );
 }
