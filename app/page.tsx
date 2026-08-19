@@ -1,25 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import {
-  ChangeEvent,
-  PointerEvent,
-  useEffect,
-  useState,
-} from "react";
+import { ChangeEvent, PointerEvent, useEffect, useState } from "react";
 
 const CANVAS_WIDTH = 1080;
 const CANVAS_HEIGHT = 1920;
 
-/*
- * Área onde a foto aparece dentro da moldura.
- *
- * Estamos considerando os 1208 x 839 informados
- * como ALTURA x LARGURA.
- *
- * Se a posição real for diferente, altere apenas
- * x e y abaixo.
- */
 const PHOTO_AREA = {
   x: 20,
   y: 356,
@@ -75,12 +61,7 @@ export default function ApoiePage() {
     };
   }, [photoUrl]);
 
-  /*
-   * INÍCIO DO ARRASTE
-   */
-  function handlePointerDown(
-    event: PointerEvent<HTMLDivElement>
-  ) {
+  function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!photoUrl) return;
 
     event.preventDefault();
@@ -95,12 +76,7 @@ export default function ApoiePage() {
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  /*
-   * MOVIMENTO
-   */
-  function handlePointerMove(
-    event: PointerEvent<HTMLDivElement>
-  ) {
+  function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!isDragging) return;
 
     const newX = event.clientX - dragStart.x;
@@ -112,28 +88,14 @@ export default function ApoiePage() {
     });
   }
 
-  /*
-   * FINAL DO ARRASTE
-   */
-  function handlePointerUp(
-    event: PointerEvent<HTMLDivElement>
-  ) {
+  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
     setIsDragging(false);
 
-    if (
-      event.currentTarget.hasPointerCapture(
-        event.pointerId
-      )
-    ) {
-      event.currentTarget.releasePointerCapture(
-        event.pointerId
-      );
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }
 
-  /*
-   * CENTRALIZAR
-   */
   function handleCenterPhoto() {
     setPosition({
       x: 0,
@@ -141,9 +103,6 @@ export default function ApoiePage() {
     });
   }
 
-  /*
-   * DOWNLOAD
-   */
   async function handleDownload() {
     if (!photoUrl) return;
 
@@ -156,55 +115,48 @@ export default function ApoiePage() {
 
     if (!ctx) return;
 
-    /*
-     * CARREGA FOTO
-     */
     const photoImage = new window.Image();
 
     photoImage.src = photoUrl;
 
     await new Promise<void>((resolve, reject) => {
       photoImage.onload = () => resolve();
+
       photoImage.onerror = () =>
         reject(new Error("Erro ao carregar a foto."));
     });
 
-    /*
-     * PROPORÇÃO ORIGINAL DA FOTO
-     */
     const imageRatio =
       photoImage.width / photoImage.height;
 
-    /*
-     * PROPORÇÃO DA ÁREA DISPONÍVEL
-     */
     const areaRatio =
       PHOTO_AREA.width / PHOTO_AREA.height;
 
-    let drawWidth: number;
-    let drawHeight: number;
+    let baseWidth: number;
+    let baseHeight: number;
 
     /*
-     * Faz a imagem preencher toda a área.
+     * AQUI ESTÁ A PRINCIPAL ALTERAÇÃO.
      *
-     * Isso é equivalente ao object-cover.
+     * A imagem inicialmente será CONTIDA dentro
+     * da área, em vez de ser cortada.
      */
     if (imageRatio > areaRatio) {
-      drawHeight = PHOTO_AREA.height;
-      drawWidth = drawHeight * imageRatio;
+      baseWidth = PHOTO_AREA.width;
+      baseHeight = baseWidth / imageRatio;
     } else {
-      drawWidth = PHOTO_AREA.width;
-      drawHeight = drawWidth / imageRatio;
+      baseHeight = PHOTO_AREA.height;
+      baseWidth = baseHeight * imageRatio;
     }
 
     /*
-     * APLICA ZOOM
+     * APLICA O ZOOM
      */
-    drawWidth *= scale;
-    drawHeight *= scale;
+    const drawWidth = baseWidth * scale;
+    const drawHeight = baseHeight * scale;
 
     /*
-     * POSIÇÃO CENTRAL DA FOTO
+     * CENTRALIZA A FOTO
      */
     let drawX =
       PHOTO_AREA.x +
@@ -215,10 +167,7 @@ export default function ApoiePage() {
       (PHOTO_AREA.height - drawHeight) / 2;
 
     /*
-     * A posição usada no editor visual precisa
-     * ser convertida para a escala do Canvas.
-     *
-     * O editor ocupa 100% da largura disponível.
+     * CONVERSÃO DO EDITOR PARA O CANVAS
      */
     const editorWidth =
       typeof window !== "undefined"
@@ -232,7 +181,7 @@ export default function ApoiePage() {
     drawY += position.y * canvasScale;
 
     /*
-     * RECORTE EXATO DA ÁREA DA FOTO
+     * RECORTE DA ÁREA DA FOTO
      */
     ctx.save();
 
@@ -258,13 +207,10 @@ export default function ApoiePage() {
       drawHeight
     );
 
-    /*
-     * REMOVE O CLIP
-     */
     ctx.restore();
 
     /*
-     * CARREGA MOLDURA
+     * CARREGA A MOLDURA
      */
     const frameImage = new window.Image();
 
@@ -272,12 +218,15 @@ export default function ApoiePage() {
 
     await new Promise<void>((resolve, reject) => {
       frameImage.onload = () => resolve();
+
       frameImage.onerror = () =>
-        reject(new Error("Erro ao carregar a moldura."));
+        reject(
+          new Error("Erro ao carregar a moldura.")
+        );
     });
 
     /*
-     * MOLDURA SEMPRE POR CIMA
+     * MOLDURA POR CIMA
      */
     ctx.drawImage(
       frameImage,
@@ -298,6 +247,7 @@ export default function ApoiePage() {
       const link = document.createElement("a");
 
       link.href = url;
+
       link.download =
         "apoie-renato-figueiredo.png";
 
@@ -314,7 +264,6 @@ export default function ApoiePage() {
   return (
     <main className="min-h-screen bg-white px-5 py-10">
       <div className="mx-auto flex max-w-md flex-col items-center">
-
         {/* LOGO */}
         <Image
           src="/logo-renato.png"
@@ -336,39 +285,25 @@ export default function ApoiePage() {
 
         {/* EDITOR */}
         <div className="mt-8 w-full">
-
           <div
             className="relative w-full overflow-hidden"
             style={{
               aspectRatio: "1080 / 1920",
             }}
           >
-
             {/* FOTO */}
             {photoUrl && (
               <div
                 className="absolute overflow-hidden"
                 style={{
-                  left: `${(
-                    PHOTO_AREA.x / CANVAS_WIDTH
-                  ) * 100}%`,
+                  left: `${(PHOTO_AREA.x / CANVAS_WIDTH) * 100}%`,
+                  top: `${(PHOTO_AREA.y / CANVAS_HEIGHT) * 100}%`,
+                  width: `${(PHOTO_AREA.width / CANVAS_WIDTH) * 100}%`,
+                  height: `${(PHOTO_AREA.height / CANVAS_HEIGHT) * 100}%`,
 
-                  top: `${(
-                    PHOTO_AREA.y / CANVAS_HEIGHT
-                  ) * 100}%`,
-
-                  width: `${(
-                    PHOTO_AREA.width /
-                    CANVAS_WIDTH
-                  ) * 100}%`,
-
-                  height: `${(
-                    PHOTO_AREA.height /
-                    CANVAS_HEIGHT
-                  ) * 100}%`,
+                  borderRadius: "50%",
                 }}
               >
-
                 <div
                   className="relative h-full w-full cursor-grab touch-none active:cursor-grabbing"
                   onPointerDown={handlePointerDown}
@@ -376,10 +311,7 @@ export default function ApoiePage() {
                   onPointerUp={handlePointerUp}
                   onPointerCancel={handlePointerUp}
                   style={{
-                    transform: `
-                      translate(${position.x}px, ${position.y}px)
-                      scale(${scale})
-                    `,
+                    transform: `translate(${position.x}px, ${position.y}px)`,
                   }}
                 >
                   <Image
@@ -388,10 +320,13 @@ export default function ApoiePage() {
                     fill
                     unoptimized
                     draggable={false}
-                    className="select-none object-cover"
+                    className="select-none object-contain"
+                    style={{
+                      transform: `scale(${scale})`,
+                      transformOrigin: "center center",
+                    }}
                   />
                 </div>
-
               </div>
             )}
 
@@ -405,9 +340,7 @@ export default function ApoiePage() {
                 className="object-fill"
               />
             </div>
-
           </div>
-
         </div>
 
         {/* UPLOAD */}
@@ -433,7 +366,6 @@ export default function ApoiePage() {
           <>
             {/* ZOOM */}
             <div className="mt-6 w-full">
-
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm text-black font-medium">
                   Ajustar tamanho
@@ -451,13 +383,10 @@ export default function ApoiePage() {
                 step="0.01"
                 value={scale}
                 onChange={(event) =>
-                  setScale(
-                    Number(event.target.value)
-                  )
+                  setScale(Number(event.target.value))
                 }
                 className="w-full"
               />
-
             </div>
 
             {/* CENTRALIZAR */}
@@ -486,7 +415,6 @@ export default function ApoiePage() {
             {photo.name}
           </p>
         )}
-
       </div>
     </main>
   );
