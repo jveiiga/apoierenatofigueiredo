@@ -325,7 +325,7 @@ export default function ApoiePage() {
         />
 
         {/* TÍTULO */}
-        <h1 className="mt-6 text-center text-3xl font-bold">
+        <h1 className="mt-6 text-center text-black text-3xl font-bold">
           Apoie Renato Figueiredo
         </h1>
 
@@ -435,7 +435,7 @@ export default function ApoiePage() {
             <div className="mt-6 w-full">
 
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium">
+                <span className="text-sm text-black font-medium">
                   Ajustar tamanho
                 </span>
 
@@ -464,7 +464,7 @@ export default function ApoiePage() {
             <button
               type="button"
               onClick={handleCenterPhoto}
-              className="mt-4 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium transition hover:bg-gray-100"
+              className="mt-4 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-black font-medium transition hover:bg-gray-100"
             >
               ↺ Centralizar foto
             </button>
